@@ -1,0 +1,325 @@
+-- 1. Show the total sales (quantity sold and dollar value) for each customer.
+
+SELECT customer_name, sum(quantity) AS total_quantity, sum(price_paid) AS total_price 
+FROM sales s NATURAL JOIN customer c 
+GROUP BY c.customer_id;
+
+--without index
+"GroupAggregate  (cost=672111.78..795309.81 rows=500000 width=23) (actual time=7377.281..15114.626 rows=499823 loops=1)"
+"  Group Key: c.customer_id"
+"  ->  Merge Join  (cost=672111.78..759059.81 rows=4000000 width=23) (actual time=7369.047..13230.303 rows=4000000 loops=1)"
+"        Merge Cond: (c.customer_id = s.customer_id)"
+"        ->  Index Scan using customer_pkey on customer c  (cost=0.42..15702.42 rows=500000 width=9) (actual time=0.018..720.088 rows=500000 loops=1)"
+"        ->  Materialize  (cost=672109.37..692109.37 rows=4000000 width=18) (actual time=7369.021..11112.757 rows=4000000 loops=1)"
+"              ->  Sort  (cost=672109.37..682109.37 rows=4000000 width=18) (actual time=7369.009..10203.567 rows=4000000 loops=1)"
+"                    Sort Key: s.customer_id"
+"                    Sort Method: external merge  Disk: 117360kB"
+"                    ->  Seq Scan on sales s  (cost=0.00..69412.00 rows=4000000 width=18) (actual time=0.587..1039.379 rows=4000000 loops=1)"
+"Planning time: 4.219 ms"
+"Execution time: 15175.472 ms"
+
+--with index on sales(customer_id)
+"GroupAggregate  (cost=0.42..358894.42 rows=500000 width=23) (actual time=1308.188..1308.188 rows=0 loops=1)"
+"  Group Key: c.customer_id"
+"  ->  Nested Loop  (cost=0.42..322644.42 rows=4000000 width=23) (actual time=1308.186..1308.186 rows=0 loops=1)"
+"        ->  Index Scan using customer_pkey on customer c  (cost=0.42..15702.42 rows=500000 width=9) (actual time=0.028..149.555 rows=500000 loops=1)"
+"        ->  Index Scan using sales_customer_id on sales s  (cost=0.00..0.52 rows=9 width=18) (actual time=0.002..0.002 rows=0 loops=500000)"
+"              Index Cond: (customer_id = c.customer_id)"
+"              Rows Removed by Index Recheck: 0"
+"Planning time: 3.217 ms"
+"Execution time: 1308.359 ms"
+
+
+
+-- 2. Show the total sales for each state.
+
+SELECT state_name, sum(quantity) AS total_quantity, sum(price_paid) AS total_price 
+FROM sales s NATURAL JOIN customer c NATURAL JOIN state st 
+GROUP BY st.state_name;
+
+--without index
+"HashAggregate  (cost=235790.12..235790.75 rows=50 width=94) (actual time=7163.106..7163.142 rows=50 loops=1)"
+"  Group Key: st.state_name"
+"  ->  Hash Join  (cost=27666.12..205790.12 rows=4000000 width=94) (actual time=395.125..5109.315 rows=4000000 loops=1)"
+"        Hash Cond: (s.customer_id = c.customer_id)"
+"        ->  Seq Scan on sales s  (cost=0.00..69412.00 rows=4000000 width=18) (actual time=0.639..871.909 rows=4000000 loops=1)"
+"        ->  Hash  (cost=14580.12..14580.12 rows=500000 width=84) (actual time=385.965..385.965 rows=500000 loops=1)"
+"              Buckets: 32768  Batches: 16  Memory Usage: 1656kB"
+"              ->  Hash Join  (cost=2.12..14580.12 rows=500000 width=84) (actual time=0.436..242.669 rows=500000 loops=1)"
+"                    Hash Cond: (c.state_id = st.state_id)"
+"                    ->  Seq Scan on customer c  (cost=0.00..7703.00 rows=500000 width=8) (actual time=0.009..53.837 rows=500000 loops=1)"
+"                    ->  Hash  (cost=1.50..1.50 rows=50 width=84) (actual time=0.414..0.414 rows=50 loops=1)"
+"                          Buckets: 1024  Batches: 1  Memory Usage: 11kB"
+"                          ->  Seq Scan on state st  (cost=0.00..1.50 rows=50 width=84) (actual time=0.361..0.378 rows=50 loops=1)"
+"Planning time: 8.388 ms"
+"Execution time: 7163.333 ms"
+
+--with index on sales(customer_id)
+"HashAggregate  (cost=235790.12..235790.75 rows=50 width=94) (actual time=6866.648..6866.684 rows=50 loops=1)"
+"  Group Key: st.state_name"
+"  ->  Hash Join  (cost=27666.12..205790.12 rows=4000000 width=94) (actual time=406.754..4850.853 rows=4000000 loops=1)"
+"        Hash Cond: (s.customer_id = c.customer_id)"
+"        ->  Seq Scan on sales s  (cost=0.00..69412.00 rows=4000000 width=18) (actual time=0.031..882.828 rows=4000000 loops=1)"
+"        ->  Hash  (cost=14580.12..14580.12 rows=500000 width=84) (actual time=405.876..405.876 rows=500000 loops=1)"
+"              Buckets: 32768  Batches: 16  Memory Usage: 1656kB"
+"              ->  Hash Join  (cost=2.12..14580.12 rows=500000 width=84) (actual time=0.537..263.637 rows=500000 loops=1)"
+"                    Hash Cond: (c.state_id = st.state_id)"
+"                    ->  Seq Scan on customer c  (cost=0.00..7703.00 rows=500000 width=8) (actual time=0.007..83.232 rows=500000 loops=1)"
+"                    ->  Hash  (cost=1.50..1.50 rows=50 width=84) (actual time=0.500..0.500 rows=50 loops=1)"
+"                          Buckets: 1024  Batches: 1  Memory Usage: 11kB"
+"                          ->  Seq Scan on state st  (cost=0.00..1.50 rows=50 width=84) (actual time=0.440..0.459 rows=50 loops=1)"
+"Planning time: 4.336 ms"
+"Execution time: 6866.951 ms"
+
+
+
+-- 3. Show the total sales for each product, for a given customer. Only products that were actually bought by the given customer. Order by dollar value.
+
+SELECT product_id, sum(quantity) AS total_quantity, sum(price_paid) AS total_price
+FROM sales 
+WHERE customer_id=1 
+GROUP BY product_id 
+ORDER BY total_price DESC;
+
+--without index
+"Sort  (cost=79412.09..79412.10 rows=1 width=18) (actual time=487.166..487.167 rows=7 loops=1)"
+"  Sort Key: (sum(price_paid)) DESC"
+"  Sort Method: quicksort  Memory: 25kB"
+"  ->  HashAggregate  (cost=79412.07..79412.08 rows=1 width=18) (actual time=487.111..487.114 rows=7 loops=1)"
+"        Group Key: product_id"
+"        ->  Seq Scan on sales  (cost=0.00..79412.00 rows=9 width=18) (actual time=78.070..487.046 rows=7 loops=1)"
+"              Filter: (customer_id = 1)"
+"              Rows Removed by Filter: 3999993"
+"Planning time: 0.195 ms"
+"Execution time: 487.220 ms"
+
+--with index on sales(customer_id)
+"Sort  (cost=40.23..40.23 rows=1 width=18) (actual time=0.077..0.077 rows=7 loops=1)"
+"  Sort Key: (sum(price_paid)) DESC"
+"  Sort Method: quicksort  Memory: 25kB"
+"  ->  HashAggregate  (cost=40.21..40.22 rows=1 width=18) (actual time=0.061..0.067 rows=7 loops=1)"
+"        Group Key: product_id"
+"        ->  Bitmap Heap Scan on sales  (cost=4.50..40.14 rows=9 width=18) (actual time=0.029..0.044 rows=7 loops=1)"
+"              Recheck Cond: (customer_id = 1)"
+"              Heap Blocks: exact=7"
+"              ->  Bitmap Index Scan on sales_customer_id  (cost=0.00..4.50 rows=9 width=0) (actual time=0.021..0.021 rows=7 loops=1)"
+"                    Index Cond: (customer_id = 1)"
+"Planning time: 0.133 ms"
+"Execution time: 0.136 ms"
+
+
+
+
+-- 4. Show the total sales for each product and customer. Order by dollar value.
+
+SELECT product_id, customer_id, sum(quantity) AS total_quantity, sum(price_paid) AS total_price 
+FROM sales 
+GROUP BY product_id,customer_id 
+ORDER BY total_price DESC;
+
+--without index
+"Sort  (cost=780610.85..781761.79 rows=460374 width=22) (actual time=24046.710..28374.478 rows=3999911 loops=1)"
+"  Sort Key: (sum(price_paid)) DESC"
+"  Sort Method: external merge  Disk: 141936kB"
+"  ->  GroupAggregate  (cost=672109.37..727864.05 rows=460374 width=22) (actual time=7272.904..12443.289 rows=3999911 loops=1)"
+"        Group Key: product_id, customer_id"
+"        ->  Sort  (cost=672109.37..682109.37 rows=4000000 width=22) (actual time=7272.862..9677.484 rows=4000000 loops=1)"
+"              Sort Key: product_id, customer_id"
+"              Sort Method: external merge  Disk: 126288kB"
+"              ->  Seq Scan on sales  (cost=0.00..69412.00 rows=4000000 width=22) (actual time=0.075..902.928 rows=4000000 loops=1)"
+"Planning time: 9.694 ms"
+"Execution time: 29747.477 ms"
+
+--with index on sales(product_id,customer_id)
+"Sort  (cost=320029.85..321180.79 rows=460374 width=22) (actual time=23589.026..27430.837 rows=3999911 loops=1)"
+"  Sort Key: (sum(price_paid)) DESC"
+"  Sort Method: external merge  Disk: 141936kB"
+"  ->  GroupAggregate  (cost=0.43..267283.04 rows=460374 width=22) (actual time=0.176..14376.361 rows=3999911 loops=1)"
+"        Group Key: product_id, customer_id"
+"        ->  Index Scan using sales_product_customer_id on sales  (cost=0.43..221528.37 rows=4000000 width=22) (actual time=0.094..11262.488 rows=4000000 loops=1)"
+"Planning time: 0.131 ms"
+"Execution time: 28278.425 ms"
+
+
+
+
+-- 5. Show the total sales for each product category and state.
+
+SELECT state_name, ca.category_id, sum(quantity) AS total_quantity, sum(price_paid) AS total_price 
+FROM sales sa NATURAL JOIN customer cu NATURAL JOIN state st NATURAL JOIN category ca NATURAL JOIN product p
+GROUP BY state_name, ca.category_id;
+
+--without index
+"HashAggregate  (cost=357883.38..357945.88 rows=5000 width=98) (actual time=11668.739..11672.080 rows=5000 loops=1)"
+"  Group Key: st.state_name, ca.category_id"
+"  ->  Hash Join  (cost=37101.38..317883.38 rows=4000000 width=98) (actual time=635.893..9018.015 rows=4000000 loops=1)"
+"        Hash Cond: (sa.customer_id = cu.customer_id)"
+"        ->  Hash Join  (cost=9435.25..181505.25 rows=4000000 width=22) (actual time=290.384..4702.070 rows=4000000 loops=1)"
+"              Hash Cond: (sa.product_id = p.product_id)"
+"              ->  Seq Scan on sales sa  (cost=0.00..69412.00 rows=4000000 width=22) (actual time=0.043..888.253 rows=4000000 loops=1)"
+"              ->  Hash  (cost=6153.25..6153.25 rows=200000 width=8) (actual time=289.889..289.889 rows=200000 loops=1)"
+"                    Buckets: 131072  Batches: 4  Memory Usage: 2982kB"
+"                    ->  Hash Join  (cost=3.25..6153.25 rows=200000 width=8) (actual time=0.064..221.085 rows=200000 loops=1)"
+"                          Hash Cond: (p.category_id = ca.category_id)"
+"                          ->  Seq Scan on product p  (cost=0.00..3400.00 rows=200000 width=8) (actual time=0.006..125.787 rows=200000 loops=1)"
+"                          ->  Hash  (cost=2.00..2.00 rows=100 width=4) (actual time=0.045..0.045 rows=100 loops=1)"
+"                                Buckets: 1024  Batches: 1  Memory Usage: 12kB"
+"                                ->  Seq Scan on category ca  (cost=0.00..2.00 rows=100 width=4) (actual time=0.004..0.023 rows=100 loops=1)"
+"        ->  Hash  (cost=14580.12..14580.12 rows=500000 width=84) (actual time=336.188..336.188 rows=500000 loops=1)"
+"              Buckets: 32768  Batches: 16  Memory Usage: 1656kB"
+"              ->  Hash Join  (cost=2.12..14580.12 rows=500000 width=84) (actual time=0.035..214.104 rows=500000 loops=1)"
+"                    Hash Cond: (cu.state_id = st.state_id)"
+"                    ->  Seq Scan on customer cu  (cost=0.00..7703.00 rows=500000 width=8) (actual time=0.003..47.396 rows=500000 loops=1)"
+"                    ->  Hash  (cost=1.50..1.50 rows=50 width=84) (actual time=0.023..0.023 rows=50 loops=1)"
+"                          Buckets: 1024  Batches: 1  Memory Usage: 11kB"
+"                          ->  Seq Scan on state st  (cost=0.00..1.50 rows=50 width=84) (actual time=0.003..0.011 rows=50 loops=1)"
+"Planning time: 4.388 ms"
+"Execution time: 11673.393 ms"
+
+--with index on sales(customer_id)
+"HashAggregate  (cost=357883.38..357945.88 rows=5000 width=98) (actual time=16966.476..16971.069 rows=5000 loops=1)"
+"  Group Key: st.state_name, ca.category_id"
+"  ->  Hash Join  (cost=37101.38..317883.38 rows=4000000 width=98) (actual time=547.392..13896.997 rows=4000000 loops=1)"
+"        Hash Cond: (sa.customer_id = cu.customer_id)"
+"        ->  Hash Join  (cost=9435.25..181505.25 rows=4000000 width=22) (actual time=147.193..8923.253 rows=4000000 loops=1)"
+"              Hash Cond: (sa.product_id = p.product_id)"
+"              ->  Seq Scan on sales sa  (cost=0.00..69412.00 rows=4000000 width=22) (actual time=0.424..4125.540 rows=4000000 loops=1)"
+"              ->  Hash  (cost=6153.25..6153.25 rows=200000 width=8) (actual time=146.322..146.322 rows=200000 loops=1)"
+"                    Buckets: 131072  Batches: 4  Memory Usage: 2982kB"
+"                    ->  Hash Join  (cost=3.25..6153.25 rows=200000 width=8) (actual time=0.076..94.957 rows=200000 loops=1)"
+"                          Hash Cond: (p.category_id = ca.category_id)"
+"                          ->  Seq Scan on product p  (cost=0.00..3400.00 rows=200000 width=8) (actual time=0.006..21.402 rows=200000 loops=1)"
+"                          ->  Hash  (cost=2.00..2.00 rows=100 width=4) (actual time=0.059..0.059 rows=100 loops=1)"
+"                                Buckets: 1024  Batches: 1  Memory Usage: 12kB"
+"                                ->  Seq Scan on category ca  (cost=0.00..2.00 rows=100 width=4) (actual time=0.004..0.030 rows=100 loops=1)"
+"        ->  Hash  (cost=14580.12..14580.12 rows=500000 width=84) (actual time=391.076..391.076 rows=500000 loops=1)"
+"              Buckets: 32768  Batches: 16  Memory Usage: 1656kB"
+"              ->  Hash Join  (cost=2.12..14580.12 rows=500000 width=84) (actual time=8.294..247.942 rows=500000 loops=1)"
+"                    Hash Cond: (cu.state_id = st.state_id)"
+"                    ->  Seq Scan on customer cu  (cost=0.00..7703.00 rows=500000 width=8) (actual time=0.003..53.144 rows=500000 loops=1)"
+"                    ->  Hash  (cost=1.50..1.50 rows=50 width=84) (actual time=8.258..8.258 rows=50 loops=1)"
+"                          Buckets: 1024  Batches: 1  Memory Usage: 11kB"
+"                          ->  Seq Scan on state st  (cost=0.00..1.50 rows=50 width=84) (actual time=8.211..8.225 rows=50 loops=1)"
+"Planning time: 16.456 ms"
+"Execution time: 16972.528 ms"
+
+
+
+
+
+-- 6. For each one of the top 20 product categories and top 20 customers, it returns a tuple (top product, top customer, quantity sold, dollar value)
+
+SELECT cate.category_id, cust.customer_id, sum(quantity) AS total_quantity, sum(price_paid) AS total_price FROM
+
+(SELECT category_id, sum(price_paid) AS total_price FROM
+
+category NATURAL JOIN product NATURAL JOIN sales
+
+GROUP BY category_id ORDER BY total_price DESC limit 20) AS cate,
+
+(SELECT customer_id, sum(price_paid) AS total_price FROM sales
+
+GROUP BY customer_id ORDER BY total_price DESC limit 20) AS cust, sales s, product p
+
+WHERE p.category_id = cate.category_id and s.customer_id = cust.customer_id and s.product_id = p.product_id
+
+GROUP BY cate.category_id,cust.customer_id ORDER BY cate.category_id;
+
+--without everything
+"GroupAggregate  (cost=970964.44..970965.31 rows=35 width=22) (actual time=15774.440..15774.507 rows=54 loops=1)"
+"  Group Key: cate.category_id, cust.customer_id"
+"  ->  Sort  (cost=970964.44..970964.53 rows=35 width=22) (actual time=15774.425..15774.430 rows=56 loops=1)"
+"        Sort Key: cate.category_id, cust.customer_id"
+"        Sort Method: quicksort  Memory: 29kB"
+"        ->  Hash Join  (cost=886471.01..970963.54 rows=35 width=22) (actual time=14524.306..15774.223 rows=56 loops=1)"
+"              Hash Cond: (p.category_id = cate.category_id)"
+"              ->  Nested Loop  (cost=692773.35..777264.88 rows=174 width=22) (actual time=9038.642..10336.881 rows=296 loops=1)"
+"                    ->  Hash Join  (cost=692772.93..777186.67 rows=174 width=22) (actual time=9030.970..10225.728 rows=296 loops=1)"
+"                          Hash Cond: (s.customer_id = cust.customer_id)"
+"                          ->  Seq Scan on sales s  (cost=0.00..69412.00 rows=4000000 width=22) (actual time=0.063..567.543 rows=4000000 loops=1)"
+"                          ->  Hash  (cost=692772.68..692772.68 rows=20 width=4) (actual time=9028.697..9028.697 rows=20 loops=1)"
+"                                Buckets: 1024  Batches: 1  Memory Usage: 9kB"
+"                                ->  Subquery Scan on cust  (cost=692772.43..692772.68 rows=20 width=4) (actual time=9028.680..9028.688 rows=20 loops=1)"
+"                                      ->  Limit  (cost=692772.43..692772.48 rows=20 width=14) (actual time=9028.678..9028.683 rows=20 loops=1)"
+"                                            ->  Sort  (cost=692772.43..693923.37 rows=460374 width=14) (actual time=9028.677..9028.679 rows=20 loops=1)"
+"                                                  Sort Key: (sum(sales.price_paid)) DESC"
+"                                                  Sort Method: top-N heapsort  Memory: 26kB"
+"                                                  ->  GroupAggregate  (cost=644767.37..680522.05 rows=460374 width=14) (actual time=5609.433..8904.397 rows=499823 loops=1)"
+"                                                        Group Key: sales.customer_id"
+"                                                        ->  Sort  (cost=644767.37..654767.37 rows=4000000 width=14) (actual time=5609.411..7492.049 rows=4000000 loops=1)"
+"                                                              Sort Key: sales.customer_id"
+"                                                              Sort Method: external merge  Disk: 94928kB"
+"                                                              ->  Seq Scan on sales  (cost=0.00..69412.00 rows=4000000 width=14) (actual time=0.004..823.688 rows=4000000 loops=1)"
+"                    ->  Index Scan using product_pkey on product p  (cost=0.42..0.44 rows=1 width=8) (actual time=0.369..0.370 rows=1 loops=296)"
+"                          Index Cond: (product_id = s.product_id)"
+"              ->  Hash  (cost=193697.41..193697.41 rows=20 width=4) (actual time=5436.718..5436.718 rows=20 loops=1)"
+"                    Buckets: 1024  Batches: 1  Memory Usage: 9kB"
+"                    ->  Subquery Scan on cate  (cost=193697.16..193697.41 rows=20 width=4) (actual time=5436.693..5436.703 rows=20 loops=1)"
+"                          ->  Limit  (cost=193697.16..193697.21 rows=20 width=14) (actual time=5436.690..5436.691 rows=20 loops=1)"
+"                                ->  Sort  (cost=193697.16..193697.41 rows=100 width=14) (actual time=5436.690..5436.691 rows=20 loops=1)"
+"                                      Sort Key: (sum(sales_1.price_paid)) DESC"
+"                                      Sort Method: top-N heapsort  Memory: 26kB"
+"                                      ->  HashAggregate  (cost=193693.25..193694.50 rows=100 width=14) (actual time=5436.526..5436.581 rows=100 loops=1)"
+"                                            Group Key: category.category_id"
+"                                            ->  Hash Join  (cost=9435.25..173693.25 rows=4000000 width=14) (actual time=156.049..3809.610 rows=4000000 loops=1)"
+"                                                  Hash Cond: (sales_1.product_id = product.product_id)"
+"                                                  ->  Seq Scan on sales sales_1  (cost=0.00..69412.00 rows=4000000 width=14) (actual time=0.084..827.622 rows=4000000 loops=1)"
+"                                                  ->  Hash  (cost=6153.25..6153.25 rows=200000 width=8) (actual time=155.427..155.427 rows=200000 loops=1)"
+"                                                        Buckets: 131072  Batches: 4  Memory Usage: 2982kB"
+"                                                        ->  Hash Join  (cost=3.25..6153.25 rows=200000 width=8) (actual time=0.085..101.642 rows=200000 loops=1)"
+"                                                              Hash Cond: (product.category_id = category.category_id)"
+"                                                              ->  Seq Scan on product  (cost=0.00..3400.00 rows=200000 width=8) (actual time=0.009..22.531 rows=200000 loops=1)"
+"                                                              ->  Hash  (cost=2.00..2.00 rows=100 width=4) (actual time=0.060..0.060 rows=100 loops=1)"
+"                                                                    Buckets: 1024  Batches: 1  Memory Usage: 12kB"
+"                                                                    ->  Seq Scan on category  (cost=0.00..2.00 rows=100 width=4) (actual time=0.005..0.020 rows=100 loops=1)"
+"Planning time: 0.935 ms"
+"Execution time: 15782.326 ms"
+--index on customer.state_id, product.category_id, sales.product_id
+"GroupAggregate  (cost=887346.45..887347.32 rows=35 width=22) (actual time=13573.709..13573.709 rows=0 loops=1)"
+"  Group Key: cate.category_id, sales.customer_id"
+"  ->  Sort  (cost=887346.45..887346.53 rows=35 width=22) (actual time=13573.707..13573.707 rows=0 loops=1)"
+"        Sort Key: cate.category_id, sales.customer_id"
+"        Sort Method: quicksort  Memory: 25kB"
+"        ->  Hash Join  (cost=886474.58..887345.55 rows=35 width=22) (actual time=13573.700..13573.700 rows=0 loops=1)"
+"              Hash Cond: (p.category_id = cate.category_id)"
+"              ->  Nested Loop  (cost=692776.92..693646.89 rows=174 width=22) (actual time=8288.396..8288.396 rows=0 loops=1)"
+"                    ->  Nested Loop  (cost=692776.50..693568.68 rows=174 width=22) (actual time=8288.395..8288.395 rows=0 loops=1)"
+"                          ->  Limit  (cost=692772.43..692772.48 rows=20 width=14) (actual time=8270.468..8270.510 rows=20 loops=1)"
+"                                ->  Sort  (cost=692772.43..693923.37 rows=460374 width=14) (actual time=8270.467..8270.494 rows=20 loops=1)"
+"                                      Sort Key: (sum(sales.price_paid)) DESC"
+"                                      Sort Method: top-N heapsort  Memory: 26kB"
+"                                      ->  GroupAggregate  (cost=644767.37..680522.05 rows=460374 width=14) (actual time=5445.959..8153.269 rows=499823 loops=1)"
+"                                            Group Key: sales.customer_id"
+"                                            ->  Sort  (cost=644767.37..654767.37 rows=4000000 width=14) (actual time=5445.927..6824.569 rows=4000000 loops=1)"
+"                                                  Sort Key: sales.customer_id"
+"                                                  Sort Method: external merge  Disk: 94928kB"
+"                                                  ->  Seq Scan on sales  (cost=0.00..69412.00 rows=4000000 width=14) (actual time=0.066..816.970 rows=4000000 loops=1)"
+"                          ->  Bitmap Heap Scan on sales s  (cost=4.07..39.71 rows=9 width=22) (actual time=0.882..0.882 rows=0 loops=20)"
+"                                Recheck Cond: (customer_id = sales.customer_id)"
+"                                ->  Bitmap Index Scan on sales_customer_id  (cost=0.00..4.07 rows=9 width=0) (actual time=0.871..0.871 rows=0 loops=20)"
+"                                      Index Cond: (customer_id = sales.customer_id)"
+"                    ->  Index Scan using product_pkey on product p  (cost=0.42..0.44 rows=1 width=8) (never executed)"
+"                          Index Cond: (product_id = s.product_id)"
+"              ->  Hash  (cost=193697.41..193697.41 rows=20 width=4) (actual time=5285.259..5285.259 rows=20 loops=1)"
+"                    Buckets: 1024  Batches: 1  Memory Usage: 9kB"
+"                    ->  Subquery Scan on cate  (cost=193697.16..193697.41 rows=20 width=4) (actual time=5285.221..5285.224 rows=20 loops=1)"
+"                          ->  Limit  (cost=193697.16..193697.21 rows=20 width=14) (actual time=5285.218..5285.219 rows=20 loops=1)"
+"                                ->  Sort  (cost=193697.16..193697.41 rows=100 width=14) (actual time=5285.218..5285.218 rows=20 loops=1)"
+"                                      Sort Key: (sum(sales_1.price_paid)) DESC"
+"                                      Sort Method: top-N heapsort  Memory: 26kB"
+"                                      ->  HashAggregate  (cost=193693.25..193694.50 rows=100 width=14) (actual time=5285.033..5285.100 rows=100 loops=1)"
+"                                            Group Key: category.category_id"
+"                                            ->  Hash Join  (cost=9435.25..173693.25 rows=4000000 width=14) (actual time=156.909..3741.729 rows=4000000 loops=1)"
+"                                                  Hash Cond: (sales_1.product_id = product.product_id)"
+"                                                  ->  Seq Scan on sales sales_1  (cost=0.00..69412.00 rows=4000000 width=14) (actual time=0.030..790.435 rows=4000000 loops=1)"
+"                                                  ->  Hash  (cost=6153.25..6153.25 rows=200000 width=8) (actual time=156.322..156.322 rows=200000 loops=1)"
+"                                                        Buckets: 131072  Batches: 4  Memory Usage: 2982kB"
+"                                                        ->  Hash Join  (cost=3.25..6153.25 rows=200000 width=8) (actual time=0.147..103.720 rows=200000 loops=1)"
+"                                                              Hash Cond: (product.category_id = category.category_id)"
+"                                                              ->  Seq Scan on product  (cost=0.00..3400.00 rows=200000 width=8) (actual time=0.008..32.990 rows=200000 loops=1)"
+"                                                              ->  Hash  (cost=2.00..2.00 rows=100 width=4) (actual time=0.123..0.123 rows=100 loops=1)"
+"                                                                    Buckets: 1024  Batches: 1  Memory Usage: 12kB"
+"                                                                    ->  Seq Scan on category  (cost=0.00..2.00 rows=100 width=4) (actual time=0.004..0.027 rows=100 loops=1)"
+"Planning time: 15.072 ms"
+"Execution time: 13961.283 ms"
+

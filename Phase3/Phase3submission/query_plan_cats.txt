@@ -1,0 +1,233 @@
+--Option “Overall Likes”: The Top-10 cat videos are the ones that have collected the highest numbers of likes, overall.
+
+SELECT l.video_id, COUNT(*) AS num_likes FROM like_activity l 
+GROUP BY l.video_id
+ORDER BY num_likes DESC
+LIMIT 10;
+
+-- without index
+"Limit  (cost=8425.53..8425.56 rows=10 width=4) (actual time=170.829..170.830 rows=10 loops=1)"
+"  ->  Sort  (cost=8425.53..8426.88 rows=539 width=4) (actual time=170.828..170.828 rows=10 loops=1)"
+"        Sort Key: (count(*)) DESC"
+"        Sort Method: top-N heapsort  Memory: 25kB"
+"        ->  HashAggregate  (cost=8408.50..8413.89 rows=539 width=4) (actual time=170.194..170.561 rows=1951 loops=1)"
+"              Group Key: video_id"
+"              ->  Seq Scan on like_activity l  (cost=0.00..6348.33 rows=412033 width=4) (actual time=0.009..46.185 rows=412033 loops=1)"
+"Planning time: 0.095 ms"
+"Execution time: 170.877 ms"
+
+
+
+
+
+--Option “Friend Likes”: The Top-10 cat videos are the ones that have collected the highest numbers of likes from the friends of X.
+
+SELECT l.video_id, COUNT(*) AS num_likes 
+FROM friendship f, like_activity l WHERE f.user1=1 AND f.user2=l.user_id
+GROUP BY l.video_id
+ORDER BY num_likes DESC
+LIMIT 10;
+
+-- without index
+"Limit  (cost=248.00..248.02 rows=10 width=4) (actual time=0.167..0.170 rows=5 loops=1)"
+"  ->  Sort  (cost=248.00..249.04 rows=416 width=4) (actual time=0.166..0.169 rows=5 loops=1)"
+"        Sort Key: (count(*)) DESC"
+"        Sort Method: quicksort  Memory: 25kB"
+"        ->  HashAggregate  (cost=234.85..239.01 rows=416 width=4) (actual time=0.155..0.157 rows=5 loops=1)"
+"              Group Key: l.video_id"
+"              ->  Nested Loop  (cost=0.85..232.77 rows=416 width=4) (actual time=0.140..0.142 rows=5 loops=1)"
+"                    ->  Index Only Scan using friendship_pkey on friendship f  (cost=0.43..5.29 rows=49 width=4) (actual time=0.102..0.102 rows=1 loops=1)"
+"                          Index Cond: (user1 = 1)"
+"                          Heap Fetches: 0"
+"                    ->  Index Only Scan using like_activity_pkey on like_activity l  (cost=0.42..4.56 rows=8 width=8) (actual time=0.035..0.037 rows=5 loops=1)"
+"                          Index Cond: (user_id = f.user2)"
+"                          Heap Fetches: 0"
+"Planning time: 0.883 ms"
+"Execution time: 0.238 ms"
+
+
+--Option “Friends-of-Friends Likes”: The Top-10 cat videos are the ones that have collected the highest numbers of likes from friends and friends-of-friends.
+
+SELECT l.video, COUNT(*) AS num_likes
+FROM (
+    SELECT l.video_id AS video, l.user_id AS user 
+    FROM friendship f, like_activity l 
+    WHERE f.user1=1 AND f.user2=l.user_id
+    UNION
+    SELECT l.video_id AS video, l.user_id AS user 
+    FROM friendship f, friendship ff, like_activity l 
+    WHERE f.user1=1 AND f.user2=ff.user1 AND ff.user2=l.user_id) l
+GROUP BY l.video
+ORDER BY num_likes DESC
+LIMIT 10;
+
+-- without index
+"Limit  (cost=2921.04..2921.06 rows=10 width=4) (actual time=1.170..1.175 rows=10 loops=1)"
+"  ->  Sort  (cost=2921.04..2921.54 rows=200 width=4) (actual time=1.169..1.173 rows=10 loops=1)"
+"        Sort Key: (count(*)) DESC"
+"        Sort Method: top-N heapsort  Memory: 25kB"
+"        ->  HashAggregate  (cost=2914.71..2916.71 rows=200 width=4) (actual time=1.116..1.136 rows=57 loops=1)"
+"              Group Key: l.video_id"
+"              ->  HashAggregate  (cost=2392.46..2601.36 rows=20890 width=8) (actual time=0.793..0.950 rows=369 loops=1)"
+"                    Group Key: l.video_id, l.user_id"
+"                    ->  Append  (cost=0.85..2288.01 rows=20890 width=8) (actual time=0.026..0.612 rows=369 loops=1)"
+"                          ->  Nested Loop  (cost=0.85..232.77 rows=416 width=8) (actual time=0.026..0.031 rows=5 loops=1)"
+"                                ->  Index Only Scan using friendship_pkey on friendship f  (cost=0.43..5.29 rows=49 width=4) (actual time=0.011..0.011 rows=1 loops=1)"
+"                                      Index Cond: (user1 = 1)"
+"                                      Heap Fetches: 0"
+"                                ->  Index Only Scan using like_activity_pkey on like_activity l  (cost=0.42..4.56 rows=8 width=8) (actual time=0.009..0.011 rows=5 loops=1)"
+"                                      Index Cond: (user_id = f.user2)"
+"                                      Heap Fetches: 0"
+"                          ->  Nested Loop  (cost=1.28..1846.35 rows=20474 width=8) (actual time=0.040..0.503 rows=364 loops=1)"
+"                                ->  Nested Loop  (cost=0.85..289.61 rows=2412 width=4) (actual time=0.028..0.056 rows=44 loops=1)"
+"                                      ->  Index Only Scan using friendship_pkey on friendship f_1  (cost=0.43..5.29 rows=49 width=4) (actual time=0.003..0.004 rows=1 loops=1)"
+"                                            Index Cond: (user1 = 1)"
+"                                            Heap Fetches: 0"
+"                                      ->  Index Only Scan using friendship_pkey on friendship ff  (cost=0.43..5.30 rows=50 width=8) (actual time=0.020..0.039 rows=44 loops=1)"
+"                                            Index Cond: (user1 = f_1.user2)"
+"                                            Heap Fetches: 0"
+"                                ->  Index Only Scan using like_activity_pkey on like_activity l_1  (cost=0.42..0.57 rows=8 width=8) (actual time=0.005..0.007 rows=8 loops=44)"
+"                                      Index Cond: (user_id = ff.user2)"
+"                                      Heap Fetches: 0"
+"Planning time: 1.420 ms"
+"Execution time: 1.602 ms"
+
+
+--Option “My kind of cats”: The Top-10 cat videos are the ones that have collected the most likes from users who have liked at least one cat video that was liked by X.
+
+SELECT l.video_id, COUNT(*) AS num_likes
+FROM like_activity l 
+WHERE l.user_id IN (SELECT ly.user_id FROM like_activity lx, like_activity ly WHERE lx.user_id=1 AND lx.video_id=ly.video_id) 
+GROUP BY l.video_id
+ORDER BY num_likes DESC
+LIMIT 10;
+
+-- without index
+"Limit  (cost=29728.47..29728.49 rows=10 width=4) (actual time=679.796..679.798 rows=10 loops=1)"
+"  ->  Sort  (cost=29728.47..29729.81 rows=539 width=4) (actual time=679.794..679.794 rows=10 loops=1)"
+"        Sort Key: (count(*)) DESC"
+"        Sort Method: top-N heapsort  Memory: 25kB"
+"        ->  HashAggregate  (cost=29711.43..29716.82 rows=539 width=4) (actual time=679.102..679.526 rows=1951 loops=1)"
+"              Group Key: l.video_id"
+"              ->  Hash Join  (cost=15363.09..27651.26 rows=412033 width=4) (actual time=320.295..579.088 rows=412033 loops=1)"
+"                    Hash Cond: (l.user_id = ly.user_id)"
+"                    ->  Seq Scan on like_activity l  (cost=0.00..6348.33 rows=412033 width=8) (actual time=0.010..43.221 rows=412033 loops=1)"
+"                    ->  Hash  (cost=14755.95..14755.95 rows=48571 width=4) (actual time=320.024..320.024 rows=50000 loops=1)"
+"                          Buckets: 65536  Batches: 1  Memory Usage: 2270kB"
+"                          ->  HashAggregate  (cost=14270.24..14755.95 rows=48571 width=4) (actual time=291.821..309.204 rows=50000 loops=1)"
+"                                Group Key: ly.user_id"
+"                                ->  Hash Join  (cost=4.66..13716.88 rows=221347 width=4) (actual time=0.056..173.307 rows=239746 loops=1)"
+"                                      Hash Cond: (ly.video_id = lx.video_id)"
+"                                      ->  Seq Scan on like_activity ly  (cost=0.00..6348.33 rows=412033 width=8) (actual time=0.005..47.306 rows=412033 loops=1)"
+"                                      ->  Hash  (cost=4.56..4.56 rows=8 width=4) (actual time=0.037..0.037 rows=10 loops=1)"
+"                                            Buckets: 1024  Batches: 1  Memory Usage: 9kB"
+"                                            ->  Index Only Scan using like_activity_pkey on like_activity lx  (cost=0.42..4.56 rows=8 width=4) (actual time=0.016..0.021 rows=10 loops=1)"
+"                                                  Index Cond: (user_id = 1)"
+"                                                  Heap Fetches: 0"
+"Planning time: 0.554 ms"
+"Execution time: 680.296 ms"
+
+--with index on like_activity(video_id)
+"Limit  (cost=22983.10..22983.13 rows=10 width=4) (actual time=645.088..645.089 rows=10 loops=1)"
+"  ->  Sort  (cost=22983.10..22984.45 rows=539 width=4) (actual time=645.086..645.086 rows=10 loops=1)"
+"        Sort Key: (count(*)) DESC"
+"        Sort Method: top-N heapsort  Memory: 25kB"
+"        ->  HashAggregate  (cost=22966.06..22971.45 rows=539 width=4) (actual time=644.377..644.832 rows=1951 loops=1)"
+"              Group Key: l.video_id"
+"              ->  Hash Join  (cost=8617.73..20905.90 rows=412033 width=4) (actual time=296.614..546.785 rows=412033 loops=1)"
+"                    Hash Cond: (l.user_id = ly.user_id)"
+"                    ->  Seq Scan on like_activity l  (cost=0.00..6348.33 rows=412033 width=8) (actual time=0.008..41.401 rows=412033 loops=1)"
+"                    ->  Hash  (cost=8010.59..8010.59 rows=48571 width=4) (actual time=296.437..296.437 rows=50000 loops=1)"
+"                          Buckets: 65536  Batches: 1  Memory Usage: 2270kB"
+"                          ->  HashAggregate  (cost=7524.88..8010.59 rows=48571 width=4) (actual time=267.245..285.167 rows=50000 loops=1)"
+"                                Group Key: ly.user_id"
+"                                ->  Nested Loop  (cost=29.92..6971.51 rows=221347 width=4) (actual time=1.692..160.447 rows=239746 loops=1)"
+"                                      ->  Index Scan using like_user_id on like_activity lx  (cost=0.00..36.14 rows=8 width=4) (actual time=0.053..0.098 rows=10 loops=1)"
+"                                            Index Cond: (user_id = 1)"
+"                                      ->  Bitmap Heap Scan on like_activity ly  (cost=29.92..859.28 rows=764 width=8) (actual time=3.275..12.060 rows=23975 loops=10)"
+"                                            Recheck Cond: (video_id = lx.video_id)"
+"                                            Heap Blocks: exact=18084"
+"                                            ->  Bitmap Index Scan on like_video_id  (cost=0.00..29.73 rows=764 width=0) (actual time=2.935..2.935 rows=23975 loops=10)"
+"                                                  Index Cond: (video_id = lx.video_id)"
+"Planning time: 0.609 ms"
+"Execution time: 645.572 ms"
+
+
+--Option “My kind of cats – with preference (to cat aficionados that have the same tastes)”: The Top-10 cat videos are the ones that have collected the highest sum of weighted likes from every other user Y (i.e., given a cat video, each like on it, is multiplied according to a weight).The weight is the log cosine lc(X,Y) defined as follows: Conceptually, there is a vector vx for each user Y, including the logged-in user X. The vector has as many elements as the number of cat videos. Element i is 1 if Y liked the ith cat video; it is 0 otherwise.
+
+WITH WeightOfUsers AS 
+(SELECT ly.user_id, LOG(1+COUNT(*)) AS weight 
+ FROM like_activity lx, like_activity ly 
+ WHERE lx.user_id=1 AND lx.video_id=ly.video_id
+ GROUP BY ly.user_id)
+SELECT l.video_id, SUM(weight) AS weighted_likes
+FROM like_activity l,  WeightOfUsers w 
+WHERE l.user_id=w.user_id and l.user_id <> 1 
+GROUP BY l.video_id
+ORDER BY weighted_likes DESC
+LIMIT 10;
+
+-- without index
+"Limit  (cost=42760.34..42760.37 rows=10 width=12) (actual time=754.861..754.863 rows=10 loops=1)"
+"  CTE weightofusers"
+"    ->  HashAggregate  (cost=14823.61..15673.60 rows=48571 width=4) (actual time=261.706..284.277 rows=50000 loops=1)"
+"          Group Key: ly.user_id"
+"          ->  Hash Join  (cost=4.66..13716.88 rows=221347 width=4) (actual time=0.035..149.693 rows=239746 loops=1)"
+"                Hash Cond: (ly.video_id = lx.video_id)"
+"                ->  Seq Scan on like_activity ly  (cost=0.00..6348.33 rows=412033 width=8) (actual time=0.006..41.657 rows=412033 loops=1)"
+"                ->  Hash  (cost=4.56..4.56 rows=8 width=4) (actual time=0.022..0.022 rows=10 loops=1)"
+"                      Buckets: 1024  Batches: 1  Memory Usage: 9kB"
+"                      ->  Index Only Scan using like_activity_pkey on like_activity lx  (cost=0.42..4.56 rows=8 width=4) (actual time=0.006..0.009 rows=10 loops=1)"
+"                            Index Cond: (user_id = 1)"
+"                            Heap Fetches: 0"
+"  ->  Sort  (cost=27086.74..27088.09 rows=539 width=12) (actual time=754.860..754.861 rows=10 loops=1)"
+"        Sort Key: (sum(w.weight)) DESC"
+"        Sort Method: top-N heapsort  Memory: 25kB"
+"        ->  HashAggregate  (cost=27069.70..27075.09 rows=539 width=12) (actual time=754.204..754.585 rows=1951 loops=1)"
+"              Group Key: l.video_id"
+"              ->  Merge Join  (cost=4752.56..25009.58 rows=412025 width=12) (actual time=325.044..641.707 rows=412023 loops=1)"
+"                    Merge Cond: (l.user_id = w.user_id)"
+"                    ->  Index Only Scan using like_activity_pkey on like_activity l  (cost=0.42..13047.00 rows=412025 width=8) (actual time=0.054..124.911 rows=412023 loops=1)"
+"                          Filter: (user_id <> 1)"
+"                          Rows Removed by Filter: 10"
+"                          Heap Fetches: 0"
+"                    ->  Sort  (cost=4752.14..4873.57 rows=48571 width=12) (actual time=324.981..363.968 rows=412016 loops=1)"
+"                          Sort Key: w.user_id"
+"                          Sort Method: quicksort  Memory: 3710kB"
+"                          ->  CTE Scan on weightofusers w  (cost=0.00..971.42 rows=48571 width=12) (actual time=261.718..304.543 rows=50000 loops=1)"
+"Planning time: 0.412 ms"
+"Execution time: 757.017 ms"
+
+--with index on like_activity(video_id)
+"Limit  (cost=35983.40..35983.43 rows=10 width=12) (actual time=735.424..735.426 rows=10 loops=1)"
+"  CTE weightofusers"
+"    ->  HashAggregate  (cost=8046.67..8896.66 rows=48571 width=4) (actual time=293.519..316.060 rows=50000 loops=1)"
+"          Group Key: ly.user_id"
+"          ->  Nested Loop  (cost=30.34..6939.93 rows=221347 width=4) (actual time=7.598..166.976 rows=239746 loops=1)"
+"                ->  Index Only Scan using like_activity_pkey on like_activity lx  (cost=0.42..4.56 rows=8 width=4) (actual time=0.007..0.027 rows=10 loops=1)"
+"                      Index Cond: (user_id = 1)"
+"                      Heap Fetches: 0"
+"                ->  Bitmap Heap Scan on like_activity ly  (cost=29.92..859.28 rows=764 width=8) (actual time=2.921..12.557 rows=23975 loops=10)"
+"                      Recheck Cond: (video_id = lx.video_id)"
+"                      Heap Blocks: exact=18084"
+"                      ->  Bitmap Index Scan on like_video_id  (cost=0.00..29.73 rows=764 width=0) (actual time=2.635..2.635 rows=23975 loops=10)"
+"                            Index Cond: (video_id = lx.video_id)"
+"  ->  Sort  (cost=27086.74..27088.09 rows=539 width=12) (actual time=735.423..735.423 rows=10 loops=1)"
+"        Sort Key: (sum(w.weight)) DESC"
+"        Sort Method: top-N heapsort  Memory: 25kB"
+"        ->  HashAggregate  (cost=27069.70..27075.09 rows=539 width=12) (actual time=734.693..735.155 rows=1951 loops=1)"
+"              Group Key: l.video_id"
+"              ->  Merge Join  (cost=4752.56..25009.58 rows=412025 width=12) (actual time=358.628..631.718 rows=412023 loops=1)"
+"                    Merge Cond: (l.user_id = w.user_id)"
+"                    ->  Index Only Scan using like_activity_pkey on like_activity l  (cost=0.42..13047.00 rows=412025 width=8) (actual time=0.027..85.143 rows=412023 loops=1)"
+"                          Filter: (user_id <> 1)"
+"                          Rows Removed by Filter: 10"
+"                          Heap Fetches: 0"
+"                    ->  Sort  (cost=4752.14..4873.57 rows=48571 width=12) (actual time=358.595..395.671 rows=412016 loops=1)"
+"                          Sort Key: w.user_id"
+"                          Sort Method: quicksort  Memory: 3710kB"
+"                          ->  CTE Scan on weightofusers w  (cost=0.00..971.42 rows=48571 width=12) (actual time=293.531..335.694 rows=50000 loops=1)"
+"Planning time: 0.455 ms"
+"Execution time: 737.549 ms"
+
+

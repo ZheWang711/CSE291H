@@ -1,0 +1,90 @@
+Result
+
+Sales
+
+insert 10 tuples
+    without precompute
+
+        insert 10
+        18ms
+
+        query time
+        13.8s - 14.2s
+
+    with precompute
+
+        ivm update time
+        1.8s - 65ms
+
+        query using precompute table
+        2.9s
+
+
+
+insert 1000 tuples
+    without precompute
+
+        insert 1000
+        99ms
+
+        query time
+        13.3s
+
+    with precompute
+
+        ivm update time
+        170s
+        ivm update time using simulated update
+        2s
+
+        query using precompute table
+        4.7s
+
+insert 1000000
+    without precompute
+        insert 1000000
+        37.2s
+        query after insert
+        18.5s
+
+    with precompute
+        ivm update time by simulated update
+        44.5s
+        query
+        5.9s
+
+insert 3000000
+    without precompute
+        insert 3000000
+        108s
+        query after insert
+        33.2s
+
+    with precompute
+        ivm update time by simulated update
+        126s
+        query
+        10.3s
+
+
+
+
+Cats
+
+Create table 374s
+
+no insertions
+    without precompute
+        280ms
+    with precompute
+        99ms
+
+insert 1000000
+    without precompute
+        query after insert 327ms
+
+
+
+
+
+
